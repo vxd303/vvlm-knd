@@ -1,4 +1,3 @@
-#define DEBUG_TYPE "objdiv"
 #include <string>
 #include <sstream>
 
@@ -15,6 +14,8 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "llvm/IR/Instructions.h"
+
+#define DEBUG_TYPE "objdiv"
 
 using namespace llvm;
 
@@ -175,8 +176,14 @@ namespace llvm {
                                 //errs()<<"Load: "<<*(Load->getPointerOperand())<<"\n";
                                 Value* indexList[2] = {ConstantInt::get(variable->getType(), 0), variable};
                                 Value *const_key=builder.getInt8(key);
-                                Value *GEP=builder.CreateGEP(gvar,ArrayRef<Value*>(indexList, 2),"arrayIdx");
-                                LoadInst *loadElement=builder.CreateLoad(GEP,false);
+                                #if LLVM_VERSION_MAJOR >= 14
+                                        Value *GEP=builder.CreateGEP(gvar->getType()->getScalarType()->getPointerElementType(),gvar,ArrayRef<Value*>(indexList, 2),"arrayIdx");
+                                        LoadInst *loadElement=builder.CreateLoad(GEP->getType()->getScalarType()->getPointerElementType(),GEP,false);
+                                #else
+                                        Value *GEP=builder.CreateGEP(gvar,ArrayRef<Value*>(indexList, 2),"arrayIdx");
+                                        LoadInst *loadElement=builder.CreateLoad(GEP,false);
+                                #endif
+                                
                                 loadElement->setAlignment(Align(1));
                                 //errs()<<"Type: "<<*loadElement<<"\n";
                                 //CastInst* extended = new ZExtInst(const_key, loadElement->getType(), "extended", for_body);
