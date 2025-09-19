@@ -78,13 +78,14 @@ bool Flattening::flatten(Function *f) {
   for (Function::iterator i = f->begin(); i != f->end(); ++i) {
     BasicBlock *tmp = &*i;
     if (tmp->isEHPad() || tmp->isLandingPad()) {
-      errs()<<f->getName()<<" Contains Exception Handing Instructions and is unsupported for flattening in the open-source version of Hikari.\n";
-      return false;
+          errs()<<f->getName()<<" Contains Exception Handing Instructions and is unsupported for flattening in the open-source version of Hikari.\n";
+          return false;
     }
+    
     origBB.push_back(tmp);
 
     BasicBlock *bb = &*i;
-    if (isa<InvokeInst>(bb->getTerminator())) {
+    if (!isa<BranchInst>(bb->getTerminator()) && !isa<ReturnInst>(bb->getTerminator())) {
       return false;
     }
   }
@@ -170,6 +171,7 @@ bool Flattening::flatten(Function *f) {
     numCase = cast<ConstantInt>(ConstantInt::get(
         switchI->getCondition()->getType(),
         llvm::cryptoutils->scramble32(switchI->getNumCases(), scrambling_key)));
+
     switchI->addCase(numCase, i);
   }
 
