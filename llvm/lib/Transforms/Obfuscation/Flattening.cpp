@@ -41,6 +41,7 @@ static RegisterPass<Flattening> X("flattening", "Call graph flattening");
 Pass *llvm::createFlattening(bool flag) { return new Flattening(flag); }
 
 bool Flattening::runOnFunction(Function &F) {
+  llvm::cryptoutils->seedFor(F);
   Function *tmp = &F;
   // Do we obfuscate
   if (toObfuscate(flag, tmp, "fla")) {

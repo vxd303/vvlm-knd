@@ -7,24 +7,24 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains includes and defines for the AES CTR PRNG
-// The AES implementation has been derived and adapted
-// from libtomcrypt (see http://libtom.org)
-// Created on: 22 juin 2012
-// Author(s): jrinaldini, pjunod
+// This file contains includes and defines for the obfuscation PRNG.
+// The original implementation was AES-CTR-based; it has since been updated
+// to rely on a xoshiro stream generator with deterministic seeding.
 //===----------------------------------------------------------------------===//
 #ifndef _OBFUSCATION_CRYPTUTILS_H
 #define _OBFUSCATION_CRYPTUTILS_H
 
 #include "llvm/Support/ManagedStatic.h"
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <string>
 
 namespace llvm {
 
 class CryptoUtils;
+class Function;
 extern ManagedStatic<CryptoUtils> cryptoutils;
 
 #define BYTE(x, n) (((x) >> (8 * (n))) & 0xFF)
@@ -88,8 +88,6 @@ extern ManagedStatic<CryptoUtils> cryptoutils;
     "Unknown endianness of the compilation platform, check this header aes_encrypt.h"
 #endif
 
-#define CryptoUtils_POOL_SIZE (0x1 << 17) // 2^17
-
 class CryptoUtils {
 public:
   CryptoUtils();
@@ -99,6 +97,7 @@ public:
   void get_bytes(char *buffer, const int len);
   char get_char();
   bool prng_seed(std::string const &seed);
+  void seedFor(Function &F);
 
   // Returns a uniformly distributed 8-bit value
   uint8_t get_uint8_t();
@@ -115,11 +114,10 @@ public:
   int sha256(const char *msg, unsigned char *hash);
 
 private:
-  uint32_t ks[44];
-  char key[16];
-  char ctr[16];
-  char pool[CryptoUtils_POOL_SIZE];
-  uint32_t idx;
+  std::array<uint64_t, 4> State;
+  std::array<uint8_t, 32> LastSeedBytes;
+  uint64_t BytePool;
+  unsigned AvailableBytes;
   std::string seed;
   bool seeded;
 
@@ -129,11 +127,9 @@ private:
     unsigned char buf[64];
   } sha256_state;
 
-  void aes_compute_ks(uint32_t *ks, const char *k);
-  void aes_encrypt(char *out, const char *in, const uint32_t *ks);
+  void applySeed(const uint8_t *SeedMaterial, std::size_t Length);
+  uint64_t next64();
   bool prng_seed();
-  void inc_ctr();
-  void populate_pool();
   int sha256_done(sha256_state *md, unsigned char *out);
   int sha256_init(sha256_state *md);
   static int sha256_compress(sha256_state *md, unsigned char *buf);

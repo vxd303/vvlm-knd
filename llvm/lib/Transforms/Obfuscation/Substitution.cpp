@@ -105,6 +105,7 @@ static RegisterPass<Substitution> X("substitution", "operators substitution");
 Pass *llvm::createSubstitution(bool flag) { return new Substitution(flag); }
 
 bool Substitution::runOnFunction(Function &F) {
+  llvm::cryptoutils->seedFor(F);
   // Check if the percentage is correct
   if (ObfTimes <= 0) {
     errs() << "Substitution application number -sub_loop=x must be x > 0";

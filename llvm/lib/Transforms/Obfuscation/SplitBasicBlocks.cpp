@@ -49,6 +49,7 @@ Pass *llvm::createSplitBasicBlock(bool flag) {
 }
 
 bool SplitBasicBlock::runOnFunction(Function &F) {
+  llvm::cryptoutils->seedFor(F);
   // Check if the number of applications is correct
   if (!((SplitNum > 1) && (SplitNum <= 10))) {
     errs() << "Split application basic block percentage\

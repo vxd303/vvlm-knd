@@ -143,6 +143,7 @@ struct BogusControlFlow : public FunctionPass {
    * to the function. See header for more details.
    */
   virtual bool runOnFunction(Function &F) {
+    llvm::cryptoutils->seedFor(F);
     // Check if the percentage is correct
     if (ObfTimes <= 0) {
       errs() << "BogusControlFlow application number -bcf_loop=x must be x > 0";
