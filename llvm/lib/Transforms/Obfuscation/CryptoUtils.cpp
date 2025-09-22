@@ -353,9 +353,6 @@ void CryptoUtils::seedFor(Function &F) {
   if (auto SourceDate = sys::Process::GetEnv("SOURCE_DATE_EPOCH"))
     Append(*SourceDate);
 
-  Append(StringRef(__DATE__));
-  Append(StringRef(__TIME__));
-
   if (Module *M = F.getParent()) {
     Append(M->getModuleIdentifier());
     Append(M->getSourceFileName());
