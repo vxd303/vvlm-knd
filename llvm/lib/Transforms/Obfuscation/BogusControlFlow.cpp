@@ -144,21 +144,31 @@ struct BogusControlFlow : public FunctionPass {
    */
   virtual bool runOnFunction(Function &F) {
     llvm::cryptoutils->seedFor(F);
+    int LocalObfTimes = ObfTimes;
+    int LocalObfProbRate = ObfProbRate;
+
+    if (Optional<int> TimesOverride = getAnnotationInt(&F, "bcf", "loop")) {
+      LocalObfTimes = *TimesOverride;
+    }
+    if (Optional<int> ProbOverride = getAnnotationInt(&F, "bcf", "prob")) {
+      LocalObfProbRate = *ProbOverride;
+    }
+
     // Check if the percentage is correct
-    if (ObfTimes <= 0) {
+    if (LocalObfTimes <= 0) {
       errs() << "BogusControlFlow application number -bcf_loop=x must be x > 0";
       return false;
     }
 
     // Check if the number of applications is correct
-    if (!((ObfProbRate > 0) && (ObfProbRate <= 100))) {
+    if (!((LocalObfProbRate > 0) && (LocalObfProbRate <= 100))) {
       errs() << "BogusControlFlow application basic blocks percentage "
                 "-bcf_prob=x must be 0 < x <= 100";
       return false;
     }
     // If fla annotations
     if (toObfuscate(flag, &F, "bcf")) {
-      bogus(F);
+      bogus(F, LocalObfTimes, LocalObfProbRate);
       doF(*F.getParent());
       return true;
     }
@@ -166,7 +176,7 @@ struct BogusControlFlow : public FunctionPass {
     return false;
   } // end of runOnFunction()
 
-  void bogus(Function &F) {
+  void bogus(Function &F, int LocalObfTimes, int LocalObfProbRate) {
     // For statistics and debug
     ++NumFunction;
     int NumBasicBlocks = 0;
@@ -175,25 +185,27 @@ struct BogusControlFlow : public FunctionPass {
     DEBUG_WITH_TYPE("opt", errs() << "bcf: Started on function " << F.getName()
                                   << "\n");
     DEBUG_WITH_TYPE("opt",
-                    errs() << "bcf: Probability rate: " << ObfProbRate << "\n");
-    if (ObfProbRate < 0 || ObfProbRate > 100) {
+                    errs() << "bcf: Probability rate: " << LocalObfProbRate
+                            << "\n");
+    if (LocalObfProbRate < 0 || LocalObfProbRate > 100) {
       DEBUG_WITH_TYPE("opt", errs()
                                  << "bcf: Incorrect value,"
                                  << " probability rate set to default value: "
                                  << defaultObfRate << " \n");
-      ObfProbRate = defaultObfRate;
+      LocalObfProbRate = defaultObfRate;
     }
     DEBUG_WITH_TYPE("opt", errs()
-                               << "bcf: How many times: " << ObfTimes << "\n");
-    if (ObfTimes <= 0) {
+                               << "bcf: How many times: " << LocalObfTimes
+                               << "\n");
+    if (LocalObfTimes <= 0) {
       DEBUG_WITH_TYPE("opt", errs()
                                  << "bcf: Incorrect value,"
                                  << " must be greater than 1. Set to default: "
                                  << defaultObfTime << " \n");
-      ObfTimes = defaultObfTime;
+      LocalObfTimes = defaultObfTime;
     }
-    NumTimesOnFunctions = ObfTimes;
-    int NumObfTimes = ObfTimes;
+    NumTimesOnFunctions = LocalObfTimes;
+    int NumObfTimes = LocalObfTimes;
 
     // Real begining of the pass
     // Loop for the number of time we run the pass on the function
@@ -213,7 +225,7 @@ struct BogusControlFlow : public FunctionPass {
       while (!basicBlocks.empty()) {
         NumBasicBlocks++;
         // Basic Blocks' selection
-        if ((int)llvm::cryptoutils->get_range(100) <= ObfProbRate) {
+        if ((int)llvm::cryptoutils->get_range(100) <= LocalObfProbRate) {
           DEBUG_WITH_TYPE("opt", errs() << "bcf: Block " << NumBasicBlocks
                                         << " selected. \n");
           hasBeenModified = true;

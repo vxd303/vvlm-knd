@@ -78,7 +78,7 @@ struct Substitution : public FunctionPass {
   }
 
   bool runOnFunction(Function &F);
-  bool substitute(Function *f);
+  bool substitute(Function *f, int LocalTimes);
 
   void addNeg(BinaryOperator *bo);
   void addDoubleNeg(BinaryOperator *bo);
@@ -106,8 +106,14 @@ Pass *llvm::createSubstitution(bool flag) { return new Substitution(flag); }
 
 bool Substitution::runOnFunction(Function &F) {
   llvm::cryptoutils->seedFor(F);
+  int LocalObfTimes = ObfTimes;
+
+  if (Optional<int> TimesOverride = getAnnotationInt(&F, "sub", "loop")) {
+    LocalObfTimes = *TimesOverride;
+  }
+
   // Check if the percentage is correct
-  if (ObfTimes <= 0) {
+  if (LocalObfTimes <= 0) {
     errs() << "Substitution application number -sub_loop=x must be x > 0";
     return false;
   }
@@ -115,17 +121,17 @@ bool Substitution::runOnFunction(Function &F) {
   Function *tmp = &F;
   // Do we obfuscate
   if (toObfuscate(flag, tmp, "sub")) {
-    substitute(tmp);
+    substitute(tmp, LocalObfTimes);
     return true;
   }
   return false;
 }
 
-bool Substitution::substitute(Function *f) {
+bool Substitution::substitute(Function *f, int LocalTimes) {
   Function *tmp = f;
 
   // Loop for the number of time we run the pass on the function
-  int times = ObfTimes;
+  int times = LocalTimes;
   do {
     for (Function::iterator bb = tmp->begin(); bb != tmp->end(); ++bb) {
       for (BasicBlock::iterator inst = bb->begin(); inst != bb->end(); ++inst) {
