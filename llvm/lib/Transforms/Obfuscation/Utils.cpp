@@ -1,9 +1,98 @@
 #include "llvm/Transforms/Obfuscation/Utils.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cctype>
+#include <map>
 #include <sstream>
 
 using namespace llvm;
+
+namespace {
+using AnnotationParamMap =
+    std::map<std::string, std::map<std::string, std::string>>;
+
+AnnotationParamMap parseAnnotationString(StringRef Annotation) {
+  AnnotationParamMap Result;
+
+  if (Annotation.empty()) {
+    return Result;
+  }
+
+  std::string Sanitized;
+  Sanitized.reserve(Annotation.size() * 2);
+  for (char C : Annotation) {
+    if (C == '\0') {
+      continue;
+    }
+    if (C == '(' || C == ')') {
+      Sanitized.push_back(' ');
+      Sanitized.push_back(C);
+      Sanitized.push_back(' ');
+    } else if (std::isspace(static_cast<unsigned char>(C))) {
+      Sanitized.push_back(' ');
+    } else {
+      Sanitized.push_back(C);
+    }
+  }
+
+  SmallVector<StringRef, 16> Tokens;
+  StringRef(Sanitized).split(Tokens, ' ', -1, false);
+
+  bool InsideParens = false;
+  std::string ActivePass;
+  std::string PendingPass;
+
+  for (StringRef Token : Tokens) {
+    Token = Token.trim();
+    if (Token.empty()) {
+      continue;
+    }
+
+    if (Token == "(") {
+      InsideParens = true;
+      if (!PendingPass.empty()) {
+        ActivePass = PendingPass;
+        PendingPass.clear();
+      } else {
+        ActivePass.clear();
+      }
+      continue;
+    }
+
+    if (Token == ")") {
+      InsideParens = false;
+      ActivePass.clear();
+      continue;
+    }
+
+    if (!InsideParens) {
+      PendingPass = Token.lower();
+      ActivePass.clear();
+      Result[PendingPass];
+      continue;
+    }
+
+    if (ActivePass.empty()) {
+      ActivePass = Token.lower();
+      Result[ActivePass];
+      continue;
+    }
+
+    size_t Eq = Token.find('=');
+    if (Eq == StringRef::npos) {
+      continue;
+    }
+
+    StringRef KeyRef = Token.slice(0, Eq).trim();
+    StringRef ValueRef = Token.substr(Eq + 1).trim();
+    std::string Key = KeyRef.lower();
+    Result[ActivePass][Key] = ValueRef.str();
+  }
+
+  return Result;
+}
+} // namespace
 
 // Shamefully borrowed from ../Scalar/RegToMem.cpp :(
 bool valueEscapes(Instruction *Inst) {
@@ -97,6 +186,38 @@ std::string readAnnotate(Function *f) {
     }
   }
   return annotation;
+}
+
+Optional<int> getAnnotationInt(Function *f, StringRef Pass, StringRef Key) {
+  if (!f) {
+    return None;
+  }
+
+  std::string Annotation = readAnnotate(f);
+  if (Annotation.empty()) {
+    return None;
+  }
+
+  AnnotationParamMap Params = parseAnnotationString(Annotation);
+  std::string PassKey = Pass.lower();
+  std::string KeyName = Key.lower();
+
+  auto PassIt = Params.find(PassKey);
+  if (PassIt == Params.end()) {
+    return None;
+  }
+
+  auto KeyIt = PassIt->second.find(KeyName);
+  if (KeyIt == PassIt->second.end()) {
+    return None;
+  }
+
+  int Value = 0;
+  if (StringRef(KeyIt->second).trim().getAsInteger(10, Value)) {
+    return None;
+  }
+
+  return Value;
 }
 
 bool toObfuscate(bool flag, Function *f, std::string const &attribute) {

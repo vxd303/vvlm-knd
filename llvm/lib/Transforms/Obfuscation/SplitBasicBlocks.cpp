@@ -34,7 +34,7 @@ struct SplitBasicBlock : public FunctionPass {
   SplitBasicBlock(bool flag) : FunctionPass(ID) { this->flag = flag; }
 
   bool runOnFunction(Function &F);
-  void split(Function *f);
+  void split(Function *f, int LocalSplitNum);
 
   bool containsPHI(BasicBlock *b);
   void shuffle(std::vector<int> &vec);
@@ -50,8 +50,17 @@ Pass *llvm::createSplitBasicBlock(bool flag) {
 
 bool SplitBasicBlock::runOnFunction(Function &F) {
   llvm::cryptoutils->seedFor(F);
+  int LocalSplitNum = SplitNum;
+
+  if (Optional<int> SplitOverride = getAnnotationInt(&F, "split", "split_num")) {
+    LocalSplitNum = *SplitOverride;
+  } else if (Optional<int> FlaOverride =
+                 getAnnotationInt(&F, "fla", "split_num")) {
+    LocalSplitNum = *FlaOverride;
+  }
+
   // Check if the number of applications is correct
-  if (!((SplitNum > 1) && (SplitNum <= 10))) {
+  if (!((LocalSplitNum > 1) && (LocalSplitNum <= 10))) {
     errs() << "Split application basic block percentage\
             -split_num=x must be 1 < x <= 10";
     return false;
@@ -61,14 +70,14 @@ bool SplitBasicBlock::runOnFunction(Function &F) {
 
   // Do we obfuscate
   if (toObfuscate(flag, tmp, "split")) {
-    split(tmp);
+    split(tmp, LocalSplitNum);
     ++Split;
   }
 
   return false;
 }
 
-void SplitBasicBlock::split(Function *f) {
+void SplitBasicBlock::split(Function *f, int LocalSplitNum) {
   std::vector<BasicBlock *> origBB;
 
   // Save all basic blocks
@@ -80,7 +89,7 @@ void SplitBasicBlock::split(Function *f) {
                                            IE = origBB.end();
        I != IE; ++I) {
     BasicBlock *curr = *I;
-    int splitN = SplitNum;
+    int splitN = LocalSplitNum;
 
     // No need to split a 1 inst bb
     // Or ones containing a PHI node
